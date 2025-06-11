@@ -18,7 +18,34 @@ type VarValue = string | FnValue;
 
 interface Token {
   token: string;
-  evaluate: (node: ASTNode, varMap: Map<string, VarValue>) => void;
+  evaluate: (node: ASTNode, varMap: ScopedMap) => void;
+}
+
+class ScopedMap {
+  constructor(
+    public local = new Map<string, string>() as unknown as ScopedMap,
+    public parent?: ScopedMap
+  ) {}
+  get(key: string): VarValue | undefined {
+    if (this.local.has(key)) return this.local.get(key);
+    return this.parent?.get(key);
+  }
+  set(key: string, value: VarValue) {
+    if (this.local.has(key) || !this.parent) {
+      this.local.set(key, value);
+    } else {
+      this.parent.set(key, value);
+    }
+  }
+  has(key: string): boolean {
+    return (this.local.has(key) || this.parent?.has(key)) ?? false;
+  }
+  createChild() {
+    return new ScopedMap(undefined, this);
+  }
+  entries(): [string, VarValue][] {
+    return [...(this.parent?.entries() ?? []), ...this.local.entries()];
+  }
 }
 
 const logVerbose = (...args: unknown[]) => {
@@ -27,7 +54,7 @@ const logVerbose = (...args: unknown[]) => {
   }
 };
 
-function resolveValue(name: string, varMap: Map<string, VarValue>): string {
+function resolveValue(name: string, varMap: ScopedMap): string {
   let val = varMap.get(name);
   const trace = [name];
   while (typeof val === "string" && varMap.has(val)) {
@@ -43,13 +70,12 @@ function resolveValue(name: string, varMap: Map<string, VarValue>): string {
   return final;
 }
 
-const parseConcat = (raw: string, varMap: Map<string, VarValue>) =>
+const parseConcat = (raw: string, varMap: ScopedMap) =>
   raw
     .split("➕")
     .map((part) => {
       const chars = segment(part.trim());
-      const resolved =
-        chars.length === 1 ? chars.map((token) => resolveValue(token, varMap)).join("") : part;
+      const resolved = chars.length === 1 ? resolveValue(chars[0]!, varMap) : part;
       logVerbose(`Parsed concat part "${part}" → "${resolved}"`);
       return resolved;
     })
@@ -90,8 +116,7 @@ const tokens: Token[] = [
   },
   {
     token: "🗣️",
-    evaluate: ({ args }, varMap) =>
-      console.log(args.map((arg) => resolveValue(arg, varMap)).join("")),
+    evaluate: ({ args }, varMap) => console.log(parseConcat(args.join(""), varMap)),
   },
   {
     token: "❓",
@@ -118,7 +143,7 @@ const tokens: Token[] = [
         const fn = createFn("▶️" + bodyStr);
         if (fn && fn.argNames.length === 0) {
           logVerbose("Executing conditional function block");
-          interpret(fn.body, new Map(varMap));
+          interpret(fn.body, new ScopedMap(varMap));
         }
       } else {
         logVerbose("Condition was falsey, skipping block");
@@ -143,8 +168,7 @@ function parseLine(line: string): ASTNode | undefined {
   }
 }
 
-function interpret(lines: string[], initialVars: Map<string, VarValue> = new Map()) {
-  const varMap = new Map(initialVars);
+function interpret(lines: string[], varMap: ScopedMap = new ScopedMap()) {
   for (const line of lines) {
     const trimmed = line.trim();
     if (!trimmed) continue;
@@ -167,12 +191,11 @@ function interpret(lines: string[], initialVars: Map<string, VarValue> = new Map
       if (!fnValue.argNames.length && argsPassed.length > 0)
         throw new Error(`Function '${fnName}' takes no args but got some`);
 
-      const argMap = new Map<string, string>();
-      fnValue.argNames.forEach((arg, i) => argMap.set(arg, argsPassed[i] || ""));
-      const combinedVars = new Map([...varMap, ...argMap]);
+      const scoped = varMap.createChild();
+      fnValue.argNames.forEach((arg, i) => scoped.set(arg, argsPassed[i] || ""));
 
       logVerbose(`Invoking function ${fnName}`, fnValue.body);
-      interpret(fnValue.body, combinedVars);
+      interpret(fnValue.body, scoped);
       continue;
     }
 
@@ -181,9 +204,24 @@ function interpret(lines: string[], initialVars: Map<string, VarValue> = new Map
 }
 
 const program = `
-🌼👉a
-🌷👉🔧📖▶️📖👉📖➕sdf🫷🗣️📖
-❓🌼🟰a▶️🌷🌼
+// Variables
+😃👉Happy
+// Logging
+🗣️😃 // Prints 'Happy'
+☹️👉Sad
+// Functions without args
+😕👉▶️❓☹️🟰Sad▶️🗣️Why so sad?
+// Functions with args and multiple lines (🫷≈semicolon)
+😡👉🔧🔍▶️☹️👉🔍🫷🗣️Set ☹️ to ➕☹️
+// Calling functions
+😕
+😡😃
+😕
 `;
 
-interpret(program.split("\n").filter((line) => line.trim() && !line.startsWith("// ")));
+interpret(
+  program
+    .split("\n")
+    .map((l) => l.split("// ")[0] ?? "")
+    .filter((line) => line.trim())
+);

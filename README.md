@@ -1,15 +1,21 @@
-# emojis
+# emojs
 
-To install dependencies:
+Simple AST and language mainly using emoji syntax
 
-```bash
-bun install
+```sh
+# Variables
+😃👉Happy
+# Logging
+🗣️😃 # Prints 'Happy'
+☹️👉Sad
+# Functions without args
+😕👉▶️❓☹️🟰Sad▶️🗣️Why so sad?
+# Functions with args and multiple lines (🫷≈semicolon)
+😡👉🔧🔍▶️☹️👉🔍🫷🗣️Set ☹️ to ➕☹️
+# Calling functions
+😕
+😡😃
+😕
 ```
 
-To run:
-
-```bash
-bun run src/index.ts
-```
-
-This project was created using `bun init` in bun v1.2.15. [Bun](https://bun.sh) is a fast all-in-one JavaScript runtime.
+You can run this exact script in `src/index.ts`
