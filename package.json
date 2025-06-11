@@ -1,0 +1,12 @@
+{
+  "name": "emojs",
+  "dependencies": {
+    "intl": "^1.2.5",
+    "typescript": "^5.8.3"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "private": "true",
+  "type": "module"
+}
